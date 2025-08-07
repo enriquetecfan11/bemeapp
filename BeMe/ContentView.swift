@@ -263,9 +263,9 @@ struct ContentView: View {
             cameraManager.stopSession()
         }
         .animation(.easeInOut(duration: 0.4), value: isProximityDetected)
-        .overlay(
-            // Nuevo sheet de post-captura
-            PostCaptureSheet(
+        .fullScreenCover(isPresented: $cameraManager.showPhotoPreview) {
+            // Nueva vista de post-captura rediseñada
+            PostCaptureOverlay(
                 isPresented: $cameraManager.showPhotoPreview,
                 capturedImage: cameraManager.capturedImage,
                 onSave: {
@@ -280,7 +280,7 @@ struct ContentView: View {
                     }
                 }
             )
-        )
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -584,231 +584,249 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Vista Full-Screen de Post-Captura
-struct PostCaptureSheet: View {
+// MARK: - Vista Full-Screen de Post-Captura Rediseñada
+struct PostCaptureOverlay: View {
     @Binding var isPresented: Bool
     let capturedImage: UIImage?
     let onSave: () -> Void
     let onDiscard: () -> Void
     let onShare: () -> Void
     
-    @State private var contentOffset: CGFloat = UIScreen.main.bounds.height
-    @State private var backgroundOpacity: Double = 0
-    @State private var dragOffset: CGFloat = 0
+    @State private var showPanel = false
     @State private var discardPressed = false
     @State private var savePressed = false
     @State private var sharePressed = false
     @AppStorage("enableHapticFeedback") private var enableHapticFeedback: Bool = true
     
     var body: some View {
-        if isPresented, let image = capturedImage {
-            GeometryReader { geometry in
-                ZStack {
-                    // Fondo full-screen con blur
-                    Color.black.opacity(0.5)
-                        .ignoresSafeArea()
-                        .opacity(backgroundOpacity)
-                    
-                    // Contenido principal
+        GeometryReader { geometry in
+            ZStack {
+                // Fondo difuminado que cubre toda la pantalla
+                Color.black
+                    .opacity(0.6)
+                    .blur(radius: 20)
+                    .ignoresSafeArea()
+                
+                // Panel central integrado
+                if showPanel, let image = capturedImage {
                     VStack(spacing: 0) {
-                        // Área superior con miniatura centrada
-                        VStack {
-                            Spacer()
-                            
-                            // Miniatura grande centrada
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: min(geometry.size.width * 0.7, 280), height: min(geometry.size.width * 0.7, 280))
-                                .clipShape(RoundedRectangle(cornerRadius: 24))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
-                                )
-                                .shadow(
-                                    color: Color.black.opacity(0.2),
-                                    radius: 16,
-                                    x: 0,
-                                    y: 8
-                                )
-                            
-                            Spacer()
-                        }
+                        Spacer()
                         
-                        // Botones fijos al pie de pantalla
-                        HStack(spacing: 0) {
-                            Spacer()
-                            
-                            // Botón Descartar
-                            Button(action: {
-                                handleAction {
-                                    onDiscard()
-                                }
-                            }) {
+                        // Panel principal que ocupa 90% del alto
+                        VStack(spacing: 32) {
+                            // Miniatura con borde semitransparente y sombra
+                            VStack(spacing: 24) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: min(geometry.size.width * 0.75, 320), height: min(geometry.size.width * 0.75, 320))
+                                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                                    )
+                                    .shadow(
+                                        color: Color.black.opacity(0.4),
+                                        radius: 20,
+                                        x: 0,
+                                        y: 10
+                                    )
+                                
+                                // Texto de confirmación
                                 VStack(spacing: 8) {
-                                    Image(systemName: "trash.fill")
-                                        .font(.system(size: 24, weight: .medium))
+                                    Text("¡Foto capturada!")
+                                        .font(.system(size: 22, weight: .bold, design: .rounded))
                                         .foregroundColor(.white)
                                     
-                                    Text("Descartar")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
+                                    Text("¿Qué quieres hacer con esta foto?")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .multilineTextAlignment(.center)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 80)
-                                .background(
-                                    Capsule()
-                                        .stroke(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.red.opacity(0.8),
-                                                    Color.red
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 2
-                                        )
+                            }
+                            
+                            Spacer()
+                            
+                            // VStack de botones con mejor proporción
+                            VStack(spacing: 16) {
+                                // Fila superior con Descartar y Guardar
+                                HStack(spacing: 16) {
+                                    // Botón Descartar
+                                    Button(action: {
+                                        handleAction {
+                                            onDiscard()
+                                        }
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "trash.fill")
+                                                .font(.system(size: 16, weight: .medium))
+                                            
+                                            Text("Descartar")
+                                                .font(.system(size: 16, weight: .semibold))
+                                        }
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
+                                        .frame(maxWidth: .infinity)
                                         .background(
-                                            Capsule()
-                                                .fill(Color.red.opacity(0.1))
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.red.opacity(0.8),
+                                                            Color.red
+                                                        ]),
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
                                         )
-                                )
-                            }
-                            .scaleEffect(discardPressed ? 0.95 : 1.0)
-                            .shadow(
-                                color: Color.red.opacity(0.3),
-                                radius: 8,
-                                x: 0,
-                                y: 4
-                            )
-                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                                withAnimation(.easeInOut(duration: 0.1)) {
-                                    discardPressed = pressing
-                                }
-                            }, perform: {})
-                            
-                            Spacer()
-                            
-                            // Botón Guardar
-                            Button(action: {
-                                handleAction {
-                                    onSave()
-                                }
-                            }) {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 24, weight: .medium))
-                                        .foregroundColor(.white)
+                                        .shadow(
+                                            color: Color.red.opacity(0.4),
+                                            radius: 8,
+                                            x: 0,
+                                            y: 4
+                                        )
+                                    }
+                                    .scaleEffect(discardPressed ? 0.95 : 1.0)
+                                    .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                        withAnimation(.easeInOut(duration: 0.1)) {
+                                            discardPressed = pressing
+                                        }
+                                    }, perform: {})
                                     
-                                    Text("Guardar")
-                                        .font(.system(size: 14, weight: .semibold))
+                                    // Botón Guardar
+                                    Button(action: {
+                                        handleAction {
+                                            onSave()
+                                        }
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 16, weight: .medium))
+                                            
+                                            Text("Guardar")
+                                                .font(.system(size: 16, weight: .semibold))
+                                        }
                                         .foregroundColor(.white)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 80)
-                                .background(
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.green.opacity(0.8),
-                                                    Color.green
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.green.opacity(0.8),
+                                                            Color.green
+                                                        ]),
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
                                         )
-                                )
-                            }
-                            .scaleEffect(savePressed ? 0.95 : 1.0)
-                            .shadow(
-                                color: Color.green.opacity(0.4),
-                                radius: 12,
-                                x: 0,
-                                y: 6
-                            )
-                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                                withAnimation(.easeInOut(duration: 0.1)) {
-                                    savePressed = pressing
-                                }
-                            }, perform: {})
-                            
-                            Spacer()
-                            
-                            // Botón Compartir
-                            Button(action: {
-                                handleAction {
-                                    onShare()
-                                }
-                            }) {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .font(.system(size: 24, weight: .medium))
-                                        .foregroundColor(.white)
-                                    
-                                    Text("Compartir")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 80)
-                                .background(
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.blue.opacity(0.8),
-                                                    Color.blue
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
+                                        .shadow(
+                                            color: Color.green.opacity(0.4),
+                                            radius: 8,
+                                            x: 0,
+                                            y: 4
                                         )
-                                )
-                            }
-                            .scaleEffect(sharePressed ? 0.95 : 1.0)
-                            .shadow(
-                                color: Color.blue.opacity(0.3),
-                                radius: 8,
-                                x: 0,
-                                y: 4
-                            )
-                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                                withAnimation(.easeInOut(duration: 0.1)) {
-                                    sharePressed = pressing
+                                    }
+                                    .scaleEffect(savePressed ? 0.95 : 1.0)
+                                    .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                        withAnimation(.easeInOut(duration: 0.1)) {
+                                            savePressed = pressing
+                                        }
+                                    }, perform: {})
                                 }
-                            }, perform: {})
-                            
-                            Spacer()
+                                
+                                // Botón Compartir centrado abajo
+                                Button(action: {
+                                    handleAction {
+                                        onShare()
+                                    }
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .font(.system(size: 16, weight: .medium))
+                                        
+                                        Text("Compartir")
+                                            .font(.system(size: 16, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(
+                                                LinearGradient(
+                                                    gradient: Gradient(colors: [
+                                                        Color.blue.opacity(0.8),
+                                                        Color.blue
+                                                    ]),
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    )
+                                    .shadow(
+                                        color: Color.blue.opacity(0.4),
+                                        radius: 8,
+                                        x: 0,
+                                        y: 4
+                                    )
+                                }
+                                .scaleEffect(sharePressed ? 0.95 : 1.0)
+                                .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                    withAnimation(.easeInOut(duration: 0.1)) {
+                                        sharePressed = pressing
+                                    }
+                                }, perform: {})
+                            }
                         }
                         .padding(.horizontal, 24)
-                        .padding(.bottom, geometry.safeAreaInsets.bottom + 24)
+                        .padding(.vertical, 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 28)
+                                .fill(Color.gray.opacity(0.4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 28)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                                .shadow(
+                                    color: Color.black.opacity(0.3),
+                                    radius: 20,
+                                    x: 0,
+                                    y: 10
+                                )
+                        )
+                        .frame(height: geometry.size.height * 0.9)
+                        .padding(.horizontal, 20)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        
+                        Spacer()
                     }
-                    .offset(y: contentOffset + dragOffset)
                 }
             }
-            .onAppear {
-                showView()
-            }
+        }
+        .onAppear {
+            showPanelWithAnimation()
         }
     }
     
-    private func showView() {
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) {
-            contentOffset = 0
-            backgroundOpacity = 1.0
-        }
-    }
-    
-    private func dismissView() {
+    private func showPanelWithAnimation() {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            contentOffset = UIScreen.main.bounds.height
-            backgroundOpacity = 0.0
-            dragOffset = 0
+            showPanel = true
+        }
+    }
+    
+    private func dismissPanel() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            showPanel = false
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isPresented = false
         }
     }
@@ -819,7 +837,7 @@ struct PostCaptureSheet: View {
             impactFeedback.impactOccurred()
         }
         
-        dismissView()
+        dismissPanel()
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             action()
