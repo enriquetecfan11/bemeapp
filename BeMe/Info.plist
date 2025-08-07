@@ -54,6 +54,14 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>BeMe necesita acceso a tu galería para guardar las fotos espontáneas capturadas.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Necesitamos guardar la foto en tu galería</string>
+	<string>BeMe guardará automáticamente las fotos en un álbum dedicado para organizarlas mejor</string>
+	<key>NSSiriUsageDescription</key>
+	<string>BeMe puede usar Siri para activar rápidamente la captura de fotos espontáneas con comandos de voz</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.beme.takephoto</string>
+		<string>com.beme.opencamera</string>
+	</array>
+
 </dict>
 </plist> 

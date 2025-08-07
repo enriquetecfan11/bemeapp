@@ -8,6 +8,8 @@
 
 import SwiftUI
 import AVFoundation
+import Intents
+import Combine
 
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
@@ -23,247 +25,229 @@ struct ContentView: View {
     @State private var handIconPulse: CGFloat = 1.0
     @State private var statusDots = ""
     @State private var statusOpacity: Double = 0.0
+    @State private var showSettings = false
+    @State private var siriShortcutObserver: NSObjectProtocol?
+    
+    // Settings
+    @AppStorage("captureDelay") private var captureDelay: Double = 0.0
+    @AppStorage("enableHapticFeedback") private var enableHapticFeedback: Bool = true
 
     var body: some View {
         ZStack {
-            // Vista de cámara
+            // Fondo de cámara con gradiente
             if cameraManager.cameraPermissionGranted {
                 CameraPreview(session: cameraManager.session)
                     .ignoresSafeArea()
                     .overlay(
-                        // Overlay sutil para enfocar atención en las instrucciones
-                        Color.black.opacity(showInstructions && !isProximityDetected ? 0.2 : 0.0)
+                        // Gradiente sutil para mejor legibilidad
+                        LinearGradient(
+                            gradient: Gradient(stops: [
+                                .init(color: Color.black.opacity(0.3), location: 0.0),
+                                .init(color: Color.clear, location: 0.3),
+                                .init(color: Color.clear, location: 0.7),
+                                .init(color: Color.black.opacity(0.4), location: 1.0)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                             .ignoresSafeArea()
-                            .animation(.easeInOut(duration: 0.3), value: showInstructions)
+                        .opacity(showInstructions && !isProximityDetected ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.5), value: showInstructions)
                     )
             } else {
-                // Pantalla de permisos
+                // Fondo elegante para permisos
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.black,
+                        Color.gray.opacity(0.8),
                 Color.black
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
                     .ignoresSafeArea()
             }
             
-            // Overlay oscuro con animación suave cuando se detecta proximidad
+            // Overlay de captura
             if isProximityDetected {
                 ZStack {
                     Color.black
                         .ignoresSafeArea()
                         .opacity(overlayOpacity)
                     
-                    // Círculo pulsante durante la captura
+                    // Efectos de captura modernos
                     if isCapturing {
+                        VStack(spacing: 30) {
+                            // Anillo pulsante principal
+                            ZStack {
+                                // Anillo exterior
+                                Circle()
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                                    .frame(width: 120, height: 120)
+                                    .scaleEffect(pulseScale * 1.2)
+                                
+                                // Anillo interior
+                                Circle()
+                                    .fill(Color.white.opacity(0.8))
+                                    .frame(width: 80, height: 80)
+                                    .scaleEffect(pulseScale)
+                                
+                                // Centro
                         Circle()
                             .fill(Color.white)
-                            .frame(width: 60, height: 60)
-                            .scaleEffect(pulseScale)
+                                    .frame(width: 40, height: 40)
+                            }
                             .animation(
-                                Animation.easeInOut(duration: 0.5)
+                                Animation.easeInOut(duration: 0.8)
                                     .repeatForever(autoreverses: true),
                                 value: pulseScale
                             )
+                            
+                            // Texto de captura
+                            Text("Capturando...")
+                                .font(.system(size: 18, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                                .opacity(pulseScale > 0.9 ? 1.0 : 0.6)
+                                .animation(.easeInOut(duration: 0.8), value: pulseScale)
+                        }
                     }
                     
-                    // Check verde de éxito
+                    // Animación de éxito mejorada
                     if showSuccessCheck {
+                        VStack(spacing: 20) {
                         ZStack {
+                                // Círculo de fondo con gradiente
                             Circle()
-                                .fill(Color.green)
-                                .frame(width: 80, height: 80)
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.green.opacity(0.8),
+                                                Color.green
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 100, height: 100)
+                                
+                                // Checkmark con sombra
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 40, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 2)
+                            }
+                            .scaleEffect(showSuccessCheck ? 1.0 : 0.2)
+                            .opacity(showSuccessCheck ? 1.0 : 0.0)
+                            .animation(
+                                .spring(response: 0.5, dampingFraction: 0.6, blendDuration: 0.1),
+                                value: showSuccessCheck
+                            )
                             
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 30, weight: .bold))
+                            Text("¡Foto capturada!")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
+                                .opacity(showSuccessCheck ? 1.0 : 0.0)
+                                .animation(.easeInOut(duration: 0.3).delay(0.2), value: showSuccessCheck)
                         }
-                        .scaleEffect(showSuccessCheck ? 1.0 : 0.3)
-                        .opacity(showSuccessCheck ? 1.0 : 0.0)
-                        .animation(
-                            .spring(response: 0.4, dampingFraction: 0.6, blendDuration: 0),
-                            value: showSuccessCheck
-                        )
                     }
                 }
             }
             
-            // Contenido de la interfaz
-            VStack {
-                // Branding BeMe en la parte superior
+                        // Interfaz principal rediseñada
+            VStack(spacing: 0) {
+                // Header centrado solo con logo
                 HStack {
                     Spacer()
-                    Text("BeMe")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
-                        .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
-                        .opacity(showInstructions && !isProximityDetected ? 0.8 : 0.4)
-                        .animation(.easeInOut(duration: 0.3), value: showInstructions)
+                    
+                    // Logo BeMe rediseñado y centrado
+                    VStack(spacing: 2) {
+                        Text("BeMe")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white,
+                                        Color.white.opacity(0.8)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        // Línea decorativa
+                        Rectangle()
+                            .fill(Color.white.opacity(0.6))
+                            .frame(width: 30, height: 1)
+                    }
+                    .opacity(showInstructions && !isProximityDetected ? 1.0 : 0.7)
+                    .animation(.easeInOut(duration: 0.4), value: showInstructions)
+                    
                     Spacer()
                 }
+                .padding(.horizontal, 24)
                 .padding(.top, 20)
                 
                 Spacer()
                 
+                // Contenido principal
                 if let errorMessage = cameraManager.errorMessage {
-                    Text(errorMessage)
-                        .padding()
-                        .background(Color.red.opacity(0.8))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .padding()
+                    ErrorView(message: errorMessage)
+                } else if !cameraManager.cameraPermissionGranted {
+                    PermissionView()
+                } else if showInstructions && !isProximityDetected {
+                    InstructionsView(
+                        handIconPulse: $handIconPulse,
+                        statusDots: $statusDots,
+                        statusOpacity: $statusOpacity,
+                        instructionsPanelScale: $instructionsPanelScale,
+                        instructionsPanelOpacity: $instructionsPanelOpacity,
+                        onAppear: startInstructionsAnimation
+                    )
                 }
                 
-                if !cameraManager.cameraPermissionGranted {
-                    VStack(spacing: 20) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.white)
-                        
-                        Text("Permiso de Cámara Requerido")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                        
-                        Text("BeMe necesita acceso a la cámara para capturar fotos espontáneas. Ve a Configuración > Privacidad > Cámara y habilita el acceso para BeMe.")
-                            .font(.body)
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(20)
-                    .padding()
-                } else if showInstructions && !isProximityDetected {
-                    // Panel de instrucciones elegante y minimalista
-                    GeometryReader { geometry in
-                        VStack {
-                            Spacer()
-                            
-                            ZStack {
-                                // Fondo principal con blur y drop shadow
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(.ultraThinMaterial.opacity(0.6))
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .fill(Color.black.opacity(0.2))
-                                    )
-                                    .overlay(
-                                        // Gradient stroke elegante
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .stroke(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [
-                                                        Color.white.opacity(0.1),
-                                                        Color.white.opacity(0.3),
-                                                        Color.white.opacity(0.1)
-                                                    ]),
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 2
-                                            )
-                                    )
-                                    .overlay(
-                                        // Inner shadow para volumen
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
-                                            .blur(radius: 1)
-                                            .offset(x: 1, y: 1)
-                                            .mask(
-                                                RoundedRectangle(cornerRadius: 24)
-                                                    .fill(LinearGradient(
-                                                        gradient: Gradient(colors: [Color.clear, Color.black]),
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ))
-                                            )
-                                    )
-                                    .shadow(
-                                        color: Color.black.opacity(0.2),
-                                        radius: 4,
-                                        x: 0,
-                                        y: 2
-                                    )
-                                
-                                VStack(spacing: 20) {
-                                    // Icono de mano animado
-                                    ZStack {
-                                        // Círculo de pulso de fondo
-                                        Circle()
-                                            .fill(Color.white.opacity(0.04))
-                                            .frame(width: 90, height: 90)
-                                            .scaleEffect(handIconPulse)
-                                            .animation(
-                                                Animation.easeInOut(duration: 2.0)
-                                                    .repeatForever(autoreverses: true),
-                                                value: handIconPulse
-                                            )
-                                        
-                                        Image(systemName: "hand.raised.fill")
-                                            .font(.system(size: 48, weight: .regular))
-                                            .foregroundColor(.white)
-                                            .scaleEffect(handIconPulse > 1.05 ? 1.04 : 1.0)
-                                            .animation(
-                                                Animation.easeInOut(duration: 2.0)
-                                                    .repeatForever(autoreverses: true),
-                                                value: handIconPulse
-                                            )
-                                    }
-                                    
-                                    VStack(spacing: 14) {
-                                        // Título principal
-                                        Text("Acerca el teléfono a tu pecho")
-                                            .font(.title3)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                            .multilineTextAlignment(.center)
-                                            .dynamicTypeSize(.large...(.accessibility1))
-                                        
-                                        // Descripción
-                                        Text("Cubre el sensor de proximidad para capturar una foto espontánea con la cámara trasera")
-                                            .font(.subheadline)
-                                            .foregroundColor(.white.opacity(0.85))
-                                            .multilineTextAlignment(.center)
-                                            .lineSpacing(1.5)
-                                            .dynamicTypeSize(.medium...(.accessibility1))
-                                        
-                                        // Subtítulo
-                                        Text("Sin vista previa • Sin filtros • Solo el momento real")
-                                            .font(.caption)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.white.opacity(0.65))
-                                            .multilineTextAlignment(.center)
-                                            .dynamicTypeSize(.small...(.large))
-                                    }
-                                    
-                                    // Indicador de estado animado
-                                    VStack(spacing: 6) {
-                                        // Línea separadora refinada
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.25))
-                                            .frame(width: 50, height: 1)
-                                        
-                                        // Estado de espera
-                                        Text("Esperando activación\(statusDots)")
-                                            .font(.caption2)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.white.opacity(0.5))
-                                            .opacity(statusOpacity)
-                                    }
-                                }
-                                .padding(.vertical, 24)
-                                .padding(.horizontal, 16)
-                            }
-                            .frame(width: geometry.size.width * 0.8)
-                            .scaleEffect(instructionsPanelScale)
-                            .opacity(instructionsPanelOpacity)
-                            .onAppear {
-                                startInstructionsAnimation()
-                            }
-                            
-                            Spacer()
+                Spacer()
+            }
+            
+            // Floating Action Button para configuración
+            VStack {
+                HStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        if enableHapticFeedback {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        showSettings = true
+                    }) {
+                        ZStack {
+                            // Background con blur
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                )
+                                .shadow(
+                                    color: Color.black.opacity(0.2),
+                                    radius: 8,
+                                    x: 0,
+                                    y: 4
+                                )
+                            
+                            // Icono de engranaje
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
                     }
+                    .opacity(showInstructions && !isProximityDetected ? 1.0 : 0.7)
+                    .scaleEffect(showInstructions && !isProximityDetected ? 1.0 : 0.95)
+                    .animation(.easeInOut(duration: 0.4), value: showInstructions)
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 60) // Safe area + margin
                 
                 Spacer()
             }
@@ -271,25 +255,65 @@ struct ContentView: View {
         .onAppear {
             setupCamera()
             setupProximitySensor()
+            setupSiriShortcuts()
         }
         .onDisappear {
             cleanupProximitySensor()
+            cleanupSiriShortcuts()
             cameraManager.stopSession()
         }
         .animation(.easeInOut(duration: 0.4), value: isProximityDetected)
-        .fullScreenCover(isPresented: $cameraManager.showPhotoPreview) {
-            if let capturedImage = cameraManager.capturedImage {
-                PhotoPreviewView(
-                    image: capturedImage,
-                    onSave: {
-                        cameraManager.savePhotoToGallery()
-                    },
-                    onDiscard: {
-                        cameraManager.discardPhoto()
+        .overlay(
+            // Nuevo sheet de post-captura
+            PostCaptureSheet(
+                isPresented: $cameraManager.showPhotoPreview,
+                capturedImage: cameraManager.capturedImage,
+                onSave: {
+                    cameraManager.savePhotoToGallery()
+                },
+                onDiscard: {
+                    cameraManager.discardPhoto()
+                },
+                onShare: {
+                    if let image = cameraManager.capturedImage {
+                        shareImage(image)
                     }
-                )
+                }
+            )
+        )
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .onChange(of: showSettings) { _, isShowing in
+            if isShowing {
+                // Deshabilitar sensor de proximidad cuando se abre Settings
+                UIDevice.current.isProximityMonitoringEnabled = false
+                print("🔧 Sensor de proximidad deshabilitado (Settings abierto)")
+            } else {
+                // Rehabilitar sensor de proximidad cuando se cierra Settings
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if cameraManager.cameraPermissionGranted && !showSettings {
+                        UIDevice.current.isProximityMonitoringEnabled = true
+                        print("📱 Sensor de proximidad rehabilitado (Settings cerrado)")
+                    }
+                }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // Rehabilitar sensor cuando la app vuelve del fondo
+            if cameraManager.cameraPermissionGranted && !showSettings {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    UIDevice.current.isProximityMonitoringEnabled = true
+                    print("📱 Sensor de proximidad rehabilitado (app en primer plano)")
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            // Deshabilitar sensor cuando la app va al fondo
+            UIDevice.current.isProximityMonitoringEnabled = false
+            print("📱 Sensor de proximidad deshabilitado (app en segundo plano)")
+        }
+        .shareBanner(image: cameraManager.capturedImage ?? UIImage(), isVisible: $cameraManager.showShareBanner)
     }
     
     private func startInstructionsAnimation() {
@@ -341,7 +365,10 @@ struct ContentView: View {
     }
     
     private func setupProximitySensor() {
+        guard cameraManager.cameraPermissionGranted else { return }
+        
         UIDevice.current.isProximityMonitoringEnabled = true
+        print("📱 Sensor de proximidad habilitado")
         
         proximityObserver = NotificationCenter.default.addObserver(
             forName: UIDevice.proximityStateDidChangeNotification,
@@ -364,8 +391,10 @@ struct ContentView: View {
             }
             
             // Feedback háptico ligero
+            if enableHapticFeedback {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
+            }
             
             // Iniciar la animación del círculo pulsante después del fade
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -376,11 +405,16 @@ struct ContentView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     cameraManager.takePhoto()
                     
+                    // Donar actividad de Siri para futuras sugerencias
+                    SiriShortcutsManager.shared.donateShortcutActivity(for: "takephoto")
+                    
                     // Mostrar check de éxito después de la captura
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         // Feedback háptico de éxito
+                        if enableHapticFeedback {
                         let successFeedback = UINotificationFeedbackGenerator()
                         successFeedback.notificationOccurred(.success)
+                        }
                         
                         isCapturing = false
                         showSuccessCheck = true
@@ -425,5 +459,628 @@ struct ContentView: View {
             proximityObserver = nil
         }
         UIDevice.current.isProximityMonitoringEnabled = false
+        print("📱 Sensor de proximidad deshabilitado")
+    }
+    
+    // MARK: - Siri Shortcuts
+    
+    private func setupSiriShortcuts() {
+        // Configurar shortcuts
+        SiriShortcutsManager.shared.setupShortcuts()
+        
+        // Observar notificaciones de shortcuts
+        siriShortcutObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SiriTakePhotoShortcut"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            handleSiriTakePhotoShortcut()
+        }
+    }
+    
+    private func cleanupSiriShortcuts() {
+        if let observer = siriShortcutObserver {
+            NotificationCenter.default.removeObserver(observer)
+            siriShortcutObserver = nil
+        }
+    }
+    
+    private func handleSiriTakePhotoShortcut() {
+        print("🎤 Manejando shortcut de Siri: Tomar foto")
+        
+        // Simular proximidad para activar la captura
+        if !isProximityDetected {
+            isProximityDetected = true
+            showInstructions = false
+            
+            // Animación del overlay
+            withAnimation(.easeInOut(duration: 0.4)) {
+                overlayOpacity = 1.0
+            }
+            
+            // Feedback háptico
+            if enableHapticFeedback {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+            }
+            
+            // Captura automática después de un breve delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                isCapturing = true
+                pulseScale = 0.8
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    cameraManager.takePhoto()
+                    
+                    // Donar actividad para futuras sugerencias de Siri
+                    SiriShortcutsManager.shared.donateShortcutActivity(for: "takephoto")
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        if enableHapticFeedback {
+                            let successFeedback = UINotificationFeedbackGenerator()
+                            successFeedback.notificationOccurred(.success)
+                        }
+                        
+                        isCapturing = false
+                        showSuccessCheck = true
+                        
+                        // Reset después de mostrar éxito
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            showSuccessCheck = false
+                            
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                overlayOpacity = 0.0
+                                isProximityDetected = false
+                            }
+                            
+                            pulseScale = 1.0
+                            instructionsPanelScale = 0.8
+                            instructionsPanelOpacity = 0.0
+                            handIconPulse = 1.0
+                            statusOpacity = 0.0
+                            statusDots = ""
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showInstructions = true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Funciones de Utilidad
+    
+    private func shareImage(_ image: UIImage) {
+        // Feedback háptico
+        if enableHapticFeedback {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }
+        
+        // Obtener el view controller actual
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else {
+            return
+        }
+        
+        // Crear el activity view controller
+        let activityViewController = UIActivityViewController(
+            activityItems: [image],
+            applicationActivities: nil
+        )
+        
+        // Configurar para iPad
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = window
+            popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        // Presentar el sheet
+        rootViewController.present(activityViewController, animated: true)
+    }
+}
+
+// MARK: - Vista Full-Screen de Post-Captura
+struct PostCaptureSheet: View {
+    @Binding var isPresented: Bool
+    let capturedImage: UIImage?
+    let onSave: () -> Void
+    let onDiscard: () -> Void
+    let onShare: () -> Void
+    
+    @State private var contentOffset: CGFloat = UIScreen.main.bounds.height
+    @State private var backgroundOpacity: Double = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var discardPressed = false
+    @State private var savePressed = false
+    @State private var sharePressed = false
+    @AppStorage("enableHapticFeedback") private var enableHapticFeedback: Bool = true
+    
+    var body: some View {
+        if isPresented, let image = capturedImage {
+            GeometryReader { geometry in
+                ZStack {
+                    // Fondo full-screen con blur
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+                        .opacity(backgroundOpacity)
+                    
+                    // Contenido principal
+                    VStack(spacing: 0) {
+                        // Área superior con miniatura centrada
+                        VStack {
+                            Spacer()
+                            
+                            // Miniatura grande centrada
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: min(geometry.size.width * 0.7, 280), height: min(geometry.size.width * 0.7, 280))
+                                .clipShape(RoundedRectangle(cornerRadius: 24))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                                )
+                                .shadow(
+                                    color: Color.black.opacity(0.2),
+                                    radius: 16,
+                                    x: 0,
+                                    y: 8
+                                )
+                            
+                            Spacer()
+                        }
+                        
+                        // Botones fijos al pie de pantalla
+                        HStack(spacing: 0) {
+                            Spacer()
+                            
+                            // Botón Descartar
+                            Button(action: {
+                                handleAction {
+                                    onDiscard()
+                                }
+                            }) {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "trash.fill")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Descartar")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 80)
+                                .background(
+                                    Capsule()
+                                        .stroke(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.red.opacity(0.8),
+                                                    Color.red
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 2
+                                        )
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.red.opacity(0.1))
+                                        )
+                                )
+                            }
+                            .scaleEffect(discardPressed ? 0.95 : 1.0)
+                            .shadow(
+                                color: Color.red.opacity(0.3),
+                                radius: 8,
+                                x: 0,
+                                y: 4
+                            )
+                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    discardPressed = pressing
+                                }
+                            }, perform: {})
+                            
+                            Spacer()
+                            
+                            // Botón Guardar
+                            Button(action: {
+                                handleAction {
+                                    onSave()
+                                }
+                            }) {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Guardar")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 80)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.green.opacity(0.8),
+                                                    Color.green
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                )
+                            }
+                            .scaleEffect(savePressed ? 0.95 : 1.0)
+                            .shadow(
+                                color: Color.green.opacity(0.4),
+                                radius: 12,
+                                x: 0,
+                                y: 6
+                            )
+                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    savePressed = pressing
+                                }
+                            }, perform: {})
+                            
+                            Spacer()
+                            
+                            // Botón Compartir
+                            Button(action: {
+                                handleAction {
+                                    onShare()
+                                }
+                            }) {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Compartir")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 80)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.blue.opacity(0.8),
+                                                    Color.blue
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                )
+                            }
+                            .scaleEffect(sharePressed ? 0.95 : 1.0)
+                            .shadow(
+                                color: Color.blue.opacity(0.3),
+                                radius: 8,
+                                x: 0,
+                                y: 4
+                            )
+                            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    sharePressed = pressing
+                                }
+                            }, perform: {})
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, geometry.safeAreaInsets.bottom + 24)
+                    }
+                    .offset(y: contentOffset + dragOffset)
+                }
+            }
+            .onAppear {
+                showView()
+            }
+        }
+    }
+    
+    private func showView() {
+        withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) {
+            contentOffset = 0
+            backgroundOpacity = 1.0
+        }
+    }
+    
+    private func dismissView() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            contentOffset = UIScreen.main.bounds.height
+            backgroundOpacity = 0.0
+            dragOffset = 0
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            isPresented = false
+        }
+    }
+    
+    private func handleAction(_ action: @escaping () -> Void) {
+        if enableHapticFeedback {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+        }
+        
+        dismissView()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            action()
+        }
+    }
+}
+
+// MARK: - Vista de Error
+struct ErrorView: View {
+    let message: String
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.red)
+            
+            Text("Error")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+            
+            Text(message)
+                .font(.body)
+                .foregroundColor(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 32)
+    }
+}
+
+// MARK: - Vista de Permisos
+struct PermissionView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            // Icono principal
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.blue.opacity(0.1),
+                                Color.blue.opacity(0.2)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 50, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            
+            VStack(spacing: 16) {
+                Text("Acceso a Cámara")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                Text("BeMe necesita acceso a la cámara para capturar fotos espontáneas.")
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                
+                VStack(spacing: 8) {
+                    Text("Ve a Configuración")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                    
+                    HStack(spacing: 4) {
+                        Text("Privacidad")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                        Text("Cámara")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                        Text("BeMe")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.6))
+                }
+            }
+        }
+        .padding(32)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.2)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .padding(.horizontal, 32)
+    }
+}
+
+// MARK: - Vista de Instrucciones
+struct InstructionsView: View {
+    @Binding var handIconPulse: CGFloat
+    @Binding var statusDots: String
+    @Binding var statusOpacity: Double
+    @Binding var instructionsPanelScale: CGFloat
+    @Binding var instructionsPanelOpacity: Double
+    let onAppear: () -> Void
+    
+    var body: some View {
+        GeometryReader { geometry in
+            VStack {
+                Spacer()
+                
+                // Panel principal rediseñado - limitado al 70% de altura
+                VStack(spacing: 28) {
+                    // Icono principal mejorado - más compacto
+                    ZStack {
+                        // Círculos de pulso múltiples
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1.5)
+                                .frame(width: 70 + CGFloat(index * 15), height: 70 + CGFloat(index * 15))
+                                .scaleEffect(handIconPulse + CGFloat(index) * 0.08)
+                                .animation(
+                                    Animation.easeInOut(duration: 2.0 + Double(index) * 0.2)
+                                        .repeatForever(autoreverses: true)
+                                        .delay(Double(index) * 0.1),
+                                    value: handIconPulse
+                                )
+                        }
+                        
+                        // Icono central
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(width: 70, height: 70)
+                            
+                            Image(systemName: "hand.raised.fill")
+                                .font(.system(size: 32, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                        .scaleEffect(handIconPulse > 1.05 ? 1.03 : 1.0)
+                        .animation(.easeInOut(duration: 2.0), value: handIconPulse)
+                    }
+                    
+                    // Texto principal - más compacto
+                    VStack(spacing: 16) {
+                        Text("Acerca el teléfono")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("Cubre el sensor de proximidad para capturar")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                        
+                        // Tags informativos - en 2 filas si es necesario
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(["Sin filtros", "Sin vista previa"], id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.1))
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                                )
+                                        )
+                                }
+                            }
+                            
+                            Text("Momento real")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.1))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                        )
+                                )
+                        }
+                    }
+                    
+                    // Estado de espera - más discreto
+                    VStack(spacing: 10) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 50, height: 1.5)
+                        
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 6, height: 6)
+                                .opacity(statusOpacity)
+                            
+                            Text("Listo\(statusDots)")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                                .opacity(statusOpacity)
+                        }
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 28)
+                                .stroke(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.white.opacity(0.15),
+                                            Color.white.opacity(0.08),
+                                            Color.white.opacity(0.15)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.8
+                                )
+                        )
+                )
+                .frame(maxHeight: geometry.size.height * 0.7) // Limitado al 70% de altura
+                .scaleEffect(instructionsPanelScale)
+                .opacity(instructionsPanelOpacity)
+                .onAppear(perform: onAppear)
+                
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(.horizontal, 28)
     }
 }

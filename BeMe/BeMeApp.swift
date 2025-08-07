@@ -8,12 +8,19 @@
 import SwiftUI
 import AVFoundation
 import Photos
+import Intents
 
 @main
 struct BeMeApp: App {
     var body: some Scene {
         WindowGroup {
             LaunchScreenView()
+                .onContinueUserActivity("com.beme.takephoto") { userActivity in
+                    handleSiriShortcut(userActivity)
+                }
+                .onContinueUserActivity("com.beme.opencamera") { userActivity in
+                    handleSiriShortcut(userActivity)
+                }
         }
     }
     
@@ -36,5 +43,26 @@ struct BeMeApp: App {
         // Los permisos se solicitarán automáticamente cuando se acceda a la cámara
         // y a la galería de fotos por primera vez
         // Las descripciones se mostrarán automáticamente usando las claves del sistema
+    }
+    
+    // MARK: - Siri Shortcuts
+    
+    private func handleSiriShortcut(_ userActivity: NSUserActivity) {
+        print("🎤 Siri shortcut recibido: \(userActivity.activityType)")
+        
+        switch userActivity.activityType {
+        case "com.beme.takephoto":
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SiriTakePhotoShortcut"),
+                object: nil
+            )
+        case "com.beme.opencamera":
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SiriOpenCameraShortcut"),
+                object: nil
+            )
+        default:
+            break
+        }
     }
 }

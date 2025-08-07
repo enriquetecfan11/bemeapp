@@ -8,6 +8,7 @@
 import AVFoundation
 import UIKit
 import Photos
+import SwiftUI
 
 class CameraManager: NSObject, ObservableObject {
     let session = AVCaptureSession()
@@ -18,6 +19,13 @@ class CameraManager: NSObject, ObservableObject {
     @Published var cameraPermissionGranted = false
     @Published var capturedImage: UIImage?
     @Published var showPhotoPreview = false
+    @Published var showShareBanner = false
+    
+    // Settings
+    @AppStorage("captureDelay") private var captureDelay: Double = 0.0
+    @AppStorage("showShareBanner") private var showShareBannerSetting: Bool = true
+    @AppStorage("enableHapticFeedback") private var enableHapticFeedback: Bool = true
+    @AppStorage("showWatermark") private var showWatermark: Bool = true
 
     override init() {
         super.init()
@@ -128,14 +136,18 @@ class CameraManager: NSObject, ObservableObject {
         }
 
         isCapturing = true
-        print("📸 Iniciando captura de foto...")
+        print("📸 Iniciando captura de foto con retardo de \(captureDelay)s...")
         
-        let settings = AVCapturePhotoSettings()
-        settings.flashMode = .off
+        // Aplicar retardo si está configurado
+        let delay = captureDelay
         
-        // Usar el hilo principal para la captura
-        DispatchQueue.main.async { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self else { return }
+            
+            let settings = AVCapturePhotoSettings()
+            settings.flashMode = .off
+            
+            // Realizar la captura
             self.output.capturePhoto(with: settings, delegate: self)
         }
     }
@@ -143,21 +155,35 @@ class CameraManager: NSObject, ObservableObject {
     func savePhotoToGallery() {
         guard let image = capturedImage else { return }
         
-        // Usar solo PHPhotoLibrary sin verificar permisos previamente
-        // iOS solicitará automáticamente los permisos si es necesario
-        PHPhotoLibrary.shared().performChanges({
-            let request = PHAssetChangeRequest.creationRequestForAsset(from: image)
-            request.creationDate = Date()
-        }) { [weak self] success, error in
+        // Usar PhotoLibraryManager para guardar en álbum dedicado
+        PhotoLibraryManager.shared.saveImageToBeMeAlbum(image) { [weak self] success, error in
             DispatchQueue.main.async {
                 if success {
-                    print("✅ Foto espontánea guardada en el carrete exitosamente")
+                    print("✅ Foto espontánea guardada en álbum BeMe exitosamente")
                     self?.errorMessage = nil
+                    
+                    // Mostrar banner de compartir si está habilitado
+                    if self?.showShareBannerSetting == true {
+                        self?.showShareBanner = true
+                    }
+                    
                     self?.capturedImage = nil
                     self?.showPhotoPreview = false
+                    
+                    // Feedback háptico de éxito
+                    if self?.enableHapticFeedback == true {
+                        let successFeedback = UINotificationFeedbackGenerator()
+                        successFeedback.notificationOccurred(.success)
+                    }
                 } else {
-                    print("❌ Error guardando imagen: \(error?.localizedDescription ?? "Error desconocido")")
+                    print("❌ Error guardando imagen en álbum BeMe: \(error?.localizedDescription ?? "Error desconocido")")
                     self?.errorMessage = "Error guardando imagen: \(error?.localizedDescription ?? "Error desconocido")"
+                    
+                    // Feedback háptico de error
+                    if self?.enableHapticFeedback == true {
+                        let errorFeedback = UINotificationFeedbackGenerator()
+                        errorFeedback.notificationOccurred(.error)
+                    }
                 }
             }
         }
@@ -252,13 +278,19 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
             return
         }
 
-        print("✅ Imagen procesada correctamente, aplicando marca de agua...")
+        print("✅ Imagen procesada correctamente...")
 
-        // Aplicar marca de agua y mostrar en preview
-        let watermarkedImage = addWatermark(to: image)
+        // Aplicar marca de agua solo si está habilitada
+        let finalImage = showWatermark ? addWatermark(to: image) : image
+        
+        if showWatermark {
+            print("✅ Marca de agua BeMe aplicada")
+        } else {
+            print("ℹ️ Foto sin marca de agua (configuración deshabilitada)")
+        }
         
         DispatchQueue.main.async { [weak self] in
-            self?.capturedImage = watermarkedImage
+            self?.capturedImage = finalImage
             self?.showPhotoPreview = true
         }
     }
