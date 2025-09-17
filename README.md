@@ -1,67 +1,50 @@
-# BeMe App
+# BeMe
 
-## Descripción General
-BeMe es una aplicación iOS desarrollada en SwiftUI que permite capturar fotos espontáneas utilizando la cámara trasera del dispositivo. La app utiliza el sensor de proximidad para detectar cuando el usuario acerca el teléfono a su pecho (cubriendo el sensor), momento en el cual se captura una foto automáticamente sin vista previa ni filtros, capturando el momento real.
+Una app para capturar fotos espontáneas con un gesto muy simple. Sin complicaciones, sin filtros: solo el momento tal cual fue.
 
-La app fuerza la orientación vertical (portrait) y solicita permisos para cámara y galería de fotos automáticamente cuando es necesario.
+## ¿Qué es BeMe?
+BeMe es una app para iPhone que toma una foto con la cámara trasera cuando cubres el sensor de proximidad (por ejemplo, acercando el teléfono al cuerpo o a la mano). Después de la foto, te muestra una pantalla sencilla para Guardar, Compartir o Descartar.
+
+## ¿Cómo funciona?
+- Abre la app y concede los permisos de Cámara y Fotos.
+- Cubre la parte superior del iPhone (donde está el sensor) para disparar la foto automáticamente.
+- Verás una miniatura de la foto y un panel con opciones: Guardar, Compartir o Descartar.
+- Las fotos guardadas van a un álbum propio llamado "BeMe" en tu Fototeca.
+
+## Principales ventajas
+- Captura por gesto: tomar una foto es tan fácil como cubrir el sensor.
+- Sin distracciones: no hay vista previa ni edición complicada.
+- Acciones claras: Guardar, Compartir o Descartar en un solo lugar.
+- Álbum dedicado: tus fotos de BeMe quedan ordenadas en Fotos.
+- Atajos de Siri: puedes crear un comando de voz para abrir o tomar la foto.
+- Marca de agua opcional: añade "BeMe" si lo prefieres.
+
+## Privacidad
+- Tus fotos son tuyas: no hay cuentas ni servidores.
+- Permisos mínimos: Cámara para capturar y Fotos para guardar/compartir.
+- Solo se piden permisos cuando son necesarios.
 
 ## Requisitos
-- iOS 14 o superior
-- Dispositivo con cámara trasera y sensor de proximidad (la mayoría de iPhones)
+- iPhone con sensor de proximidad y cámara trasera.
+- iOS 18.5 o superior.
+- Dispositivo real para probar (el simulador no tiene sensor de proximidad).
 
-## Configuraciones Principales
-- **Orientación**: Solo portrait.
-- **Permisos**:
-  - Cámara: Para capturar fotos.
-  - Galería de fotos: Para guardar las fotos capturadas.
-- **Características**:
-  - Captura automática al cubrir el sensor de proximidad.
-  - Sin flash.
-  - Vista previa post-captura con opción de guardar o descartar.
+## Cómo probar la app
+- Si usas Xcode: abre `BeMe.xcodeproj`, conecta un iPhone y ejecuta la app en el dispositivo.
+- Asegúrate de aceptar los permisos la primera vez que se soliciten.
 
-## Pantallas y Vistas Principales
+## Uso rápido
+1) Abre BeMe.
+2) Concede permisos de Cámara y Fotos.
+3) Cubre el sensor de proximidad para tomar la foto.
+4) Elige Guardar, Compartir o Descartar.
+5) Encuentra tus fotos en el álbum "BeMe" de la app Fotos.
 
-### 1. Pantalla Principal (ContentView)
-Esta es la vista inicial de la app:
-- **Funcionalidad**: Muestra una vista previa de la cámara trasera.
-- **Elementos**:
-  - Si los permisos de cámara no están granted, muestra un mensaje solicitando habilitar el permiso en Configuraciones > Privacidad > Cámara.
-  - Instrucciones: "Acerca el teléfono a tu pecho" para capturar una foto espontánea.
-  - Cuando se detecta proximidad (sensor cubierto), la pantalla se oscurece y se captura la foto automáticamente después de un breve delay.
-  - Maneja el sensor de proximidad para trigger la captura.
-- **Transiciones**: Al capturar, presenta la Pantalla de Vista Previa de Foto en modo full screen.
+## Preguntas frecuentes
+- ¿Funciona en el simulador? No. Necesitas un iPhone real por el sensor de proximidad.
+- ¿Necesito una cuenta? No. No hay registros ni inicios de sesión.
+- ¿Tiene flash o filtros? Actualmente no hay filtros y el flash no está forzado. La idea es mantener la experiencia simple; mejoras como flash automático están en evaluación.
 
-### 2. Pantalla de Vista Previa de Foto (PhotoPreviewView)
-Presentada después de capturar una foto:
-- **Funcionalidad**: Muestra la foto capturada y permite al usuario decidir si guardarla en la galería o descartarla.
-- **Elementos**:
-  - Imagen capturada en el centro, con aspect ratio preservado.
-  - Texto: "Foto Espontánea Capturada" y "¿Quieres guardar esta foto en tu galería?".
-  - Botones:
-    - "Descartar" (rojo, con ícono de basura): Descarta la foto y regresa a la pantalla principal.
-    - "Guardar" (verde, con ícono de guardar): Solicita confirmación y guarda la foto en la galería usando PHPhotoLibrary.
-- **Notas**: Muestra un progress view mientras se guarda. iOS maneja permisos automáticamente si no están granted.
+---
 
-## Componentes Clave
-- **CameraManager**: Clase que maneja la sesión de AVCaptureSession, permisos de cámara, captura de fotos y guardado en galería.
-- **CameraPreview**: Vista representable de UIKit para mostrar la preview de la cámara.
-- **BuildConfig**: Estructura con configuraciones estáticas como nombre de app, versión, orientaciones soportadas, etc.
-- **Info.plist**: Contiene descripciones de permisos para cámara y galería.
-
-## Flujo de la App
-1. La app inicia en ContentView.
-2. Solicita permisos si es necesario.
-3. Muestra preview de cámara e instrucciones.
-4. Al cubrir sensor: Captura foto.
-5. Presenta PhotoPreviewView.
-6. Usuario elige guardar (se guarda en galería) o descartar (regresa a principal).
-
-## Instalación y Ejecución
-- Abre el proyecto en Xcode.
-- Compila y ejecuta en un simulador o dispositivo iOS.
-- Asegúrate de granting permisos cuando se soliciten.
-
-## Notas Adicionales
-- La app está diseñada para capturas espontáneas, sin edición ni filtros.
-- Logs detallados están habilitados para debugging.
-- Para más detalles, revisa los archivos fuente en la carpeta BeMe/.
+BeMe busca que hacer una foto sea tan natural que no tengas que pensarlo. Captura el momento y sigue con tu día.
