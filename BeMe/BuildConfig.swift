@@ -17,6 +17,9 @@ struct BuildConfig {
     static let appBuild = "1"
     static let bundleIdentifier = "com.beme.app"
     
+    // Versión en la que debe mostrarse el onboarding por primera y única vez
+    static let onboardingInitialVersion = "1.0"
+    
     // Configuración de orientación
     static let supportedOrientations = UIInterfaceOrientationMask.portrait
     

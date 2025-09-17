@@ -18,6 +18,8 @@ struct LaunchScreenView: View {
     @State private var backgroundPulse: CGFloat = 1.0
     @State private var loadingProgress: CGFloat = 0.0
     @State private var showMainApp = false
+    @State private var showOnboarding = false
+    @AppStorage("didSeeOnboarding") private var didSeeOnboarding: Bool = false
     
     var body: some View {
         ZStack {
@@ -183,6 +185,15 @@ struct LaunchScreenView: View {
         .onAppear {
             startLaunchAnimation()
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView {
+                // Marcar como visto y pasar a la app principal
+                didSeeOnboarding = true
+                showOnboarding = false
+                showMainApp = true
+            }
+            .interactiveDismissDisabled(true)
+        }
         .fullScreenCover(isPresented: $showMainApp) {
             ContentView()
         }
@@ -226,10 +237,14 @@ struct LaunchScreenView: View {
             startLoadingProgress()
         }
         
-        // Transición a la app principal
+        // Transición: Onboarding sólo en la primera versión publicada
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
             withAnimation(.easeInOut(duration: 0.8)) {
-                showMainApp = true
+                if didSeeOnboarding || !shouldShowOnboardingThisVersion() {
+                    showMainApp = true
+                } else {
+                    showOnboarding = true
+                }
             }
         }
     }
@@ -248,9 +263,13 @@ struct LaunchScreenView: View {
             loadingProgress = 1.0
         }
     }
+
+    private func shouldShowOnboardingThisVersion() -> Bool {
+        // Mostrar onboarding solo para la versión inicial definida en BuildConfig
+        return BuildConfig.appVersion == BuildConfig.onboardingInitialVersion
+    }
 }
 
 #Preview {
     LaunchScreenView()
 }
-

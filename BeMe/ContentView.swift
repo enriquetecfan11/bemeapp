@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var statusDots = ""
     @State private var statusOpacity: Double = 0.0
     @State private var showSettings = false
+    @State private var showProfile = false
     @State private var siriShortcutObserver: NSObjectProtocol?
     
     // Settings
@@ -208,11 +209,53 @@ struct ContentView: View {
                 Spacer()
             }
             
-            // Floating Action Button para configuración
+            // Top overlays: Stats (left) + Settings (right)
             VStack {
                 HStack {
+                    // Stats badge (top-left)
+                    if cameraManager.cameraPermissionGranted {
+                        StatsBadgeView(
+                            today: cameraManager.todayPhotoCount,
+                            week: cameraManager.weekPhotoCount,
+                            total: cameraManager.totalPhotoCountPublished,
+                            session: cameraManager.sessionPhotoCount
+                        )
+                        .opacity(showInstructions && !isProximityDetected ? 1.0 : 0.85)
+                        .animation(.easeInOut(duration: 0.4), value: showInstructions)
+                    }
+                    
                     Spacer()
                     
+                    // Profile button
+                    Button(action: {
+                        if enableHapticFeedback {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                        }
+                        showProfile = true
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                    .opacity(showInstructions && !isProximityDetected ? 1.0 : 0.7)
+                    .scaleEffect(showInstructions && !isProximityDetected ? 1.0 : 0.95)
+                    .animation(.easeInOut(duration: 0.4), value: showInstructions)
+                    
+                    // Spacing between profile and settings
+                    Spacer().frame(width: 12)
+                    
+                    // Settings button (top-right)
                     Button(action: {
                         if enableHapticFeedback {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -251,6 +294,8 @@ struct ContentView: View {
                 
                 Spacer()
             }
+
+            // Floating Action Button para configuración (legacy positioning, removed to avoid duplication)
         }
         .onAppear {
             setupCamera()
@@ -283,6 +328,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(sessionCount: cameraManager.sessionPhotoCount)
         }
         .onChange(of: showSettings) { _, isShowing in
             if isShowing {

@@ -21,15 +21,27 @@ class CameraManager: NSObject, ObservableObject {
     @Published var showPhotoPreview = false
     @Published var showShareBanner = false
     
+    // Usage stats
+    @Published var sessionPhotoCount: Int = 0
+    @Published var todayPhotoCount: Int = 0
+    @Published var weekPhotoCount: Int = 0
+    @Published var totalPhotoCountPublished: Int = 0
+    
     // Settings
     @AppStorage("captureDelay") private var captureDelay: Double = 0.0
     @AppStorage("showShareBanner") private var showShareBannerSetting: Bool = true
     @AppStorage("enableHapticFeedback") private var enableHapticFeedback: Bool = true
     @AppStorage("showWatermark") private var showWatermark: Bool = true
+    
+    // Persistent counters
+    @AppStorage("totalPhotosCount") private var totalPhotosCount: Int = 0
+    @AppStorage("photosToday") private var photosToday: Int = 0
+    @AppStorage("lastPhotoDate") private var lastPhotoDate: String = ""
 
     override init() {
         super.init()
         checkPermissions()
+        initializeCounters()
     }
 
     private func checkPermissions() {
@@ -161,6 +173,7 @@ class CameraManager: NSObject, ObservableObject {
                 if success {
                     print("✅ Foto espontánea guardada en álbum BeMe exitosamente")
                     self?.errorMessage = nil
+                    self?.incrementCountersAfterSave()
                     
                     // Mostrar banner de compartir si está habilitado
                     if self?.showShareBannerSetting == true {
@@ -242,6 +255,89 @@ class CameraManager: NSObject, ObservableObject {
         UIGraphicsEndImageContext()
         
         return watermarkedImage
+    }
+    
+    // MARK: - Stats helpers
+    private func initializeCounters() {
+        // Reset session counter on launch
+        sessionPhotoCount = 0
+        
+        // Ensure daily rollover
+        let todayKey = dateKey(for: Date())
+        if lastPhotoDate != todayKey {
+            photosToday = 0
+            lastPhotoDate = todayKey
+        }
+        
+        // Publish current values
+        totalPhotoCountPublished = totalPhotosCount
+        todayPhotoCount = photosToday
+        weekPhotoCount = computeWeekCount()
+    }
+    
+    private func incrementCountersAfterSave() {
+        // Daily rollover if needed
+        let todayKey = dateKey(for: Date())
+        if lastPhotoDate != todayKey {
+            photosToday = 0
+            lastPhotoDate = todayKey
+        }
+        
+        // Increment persistent counters
+        totalPhotosCount += 1
+        photosToday += 1
+        sessionPhotoCount += 1
+        
+        // Update per-day history
+        var byDate = loadCountsByDate()
+        byDate[todayKey, default: 0] += 1
+        saveCountsByDate(byDate)
+        
+        // Publish values
+        totalPhotoCountPublished = totalPhotosCount
+        todayPhotoCount = photosToday
+        weekPhotoCount = computeWeekCount(from: byDate)
+    }
+    
+    private func dateKey(for date: Date) -> String {
+        let df = DateFormatter()
+        df.calendar = Calendar(identifier: .gregorian)
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = "yyyy-MM-dd"
+        return df.string(from: date)
+    }
+    
+    private let byDateDefaultsKey = "photoCountsByDate"
+    
+    private func loadCountsByDate() -> [String:Int] {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: byDateDefaultsKey) {
+            if let dict = try? JSONDecoder().decode([String:Int].self, from: data) {
+                return dict
+            }
+        }
+        return [:]
+    }
+    
+    private func saveCountsByDate(_ dict: [String:Int]) {
+        let defaults = UserDefaults.standard
+        if let data = try? JSONEncoder().encode(dict) {
+            defaults.set(data, forKey: byDateDefaultsKey)
+        }
+    }
+    
+    private func computeWeekCount(from dict: [String:Int]? = nil) -> Int {
+        let calendar = Calendar(identifier: .gregorian)
+        let today = calendar.startOfDay(for: Date())
+        var sum = 0
+        let counts = dict ?? loadCountsByDate()
+        for i in 0..<7 {
+            if let day = calendar.date(byAdding: .day, value: -i, to: today) {
+                let key = dateKey(for: day)
+                sum += counts[key, default: 0]
+            }
+        }
+        return sum
     }
 }
 
